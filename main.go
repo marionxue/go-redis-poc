@@ -8,7 +8,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go-redis-poc/metrics_controller"
+	"io"
 	"log"
+	"math/rand"
 	"net/http"
 	"time"
 )
@@ -20,10 +22,36 @@ var (
 	metricsNamespace = flag.String("metric.namespace", "app", "Prometheus metrics namespace, as the prefix of metrics name")
 )
 
+// query
+func Query(w http.ResponseWriter, r *http.Request) {
+	//模拟业务查询耗时0~1s
+	time.Sleep(time.Duration(rand.Intn(1000)) * time.Millisecond)
+	_, _ = io.WriteString(w, "some results")
+}
+
 func main() {
 	flag.Parse()
 	apiRequestCounter := metrics_controller.NewAPIRequestCounter(*metricsNamespace) // 创建一个新的Prometheus指标注册表
+	memoryUsageGauge := metrics_controller.NewMemoryUsageGauge(*metricsNamespace)
+	apiResponseMethod := metrics_controller.WebRequestTotal
+	apiResponseTimeHistogram := metrics_controller.WebRequestDuration
+	apiResponseCpuSummary := metrics_controller.NewCPULoadSummary(*metricsNamespace)
+	// 创建一个新的Prometheus指标注册表
 	registry := prometheus.NewRegistry()
+
+	// 注册APIRequestCounter实例到Prometheus注册表
+	registry.MustRegister(apiRequestCounter)
+
+	// 注册MemoryUsageGauge实例到Prometheus注册表
+	registry.MustRegister(memoryUsageGauge)
+
+	// 注册APIResponseTimeHistogram实例到Prometheus注册表
+	registry.MustRegister(apiResponseMethod)
+
+	registry.MustRegister(apiResponseTimeHistogram)
+
+	registry.MustRegister(apiResponseCpuSummary)
+
 	// 注册APIRequestCounter实例到Prometheus注册表
 	registry.MustRegister(apiRequestCounter)
 
@@ -74,6 +102,16 @@ func main() {
 
 	// Initialize Gin engine
 	r := gin.Default()
+	r.GET("/query", gin.WrapF(metrics_controller.Monitor(Query)))
+	// 模拟每秒记录一次CPU负载
+	go func() {
+		for {
+			load := rand.Float64() * 100 // 模拟CPU负载
+			apiResponseCpuSummary.RecordCPULoad(load)
+			time.Sleep(time.Second)
+		}
+	}()
+
 	r.GET("/", gin.WrapF(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`<html>
 	            <head><title>A Prometheus Exporter</title></head>
