@@ -16,7 +16,6 @@ import (
 )
 
 var (
-	rdb              *redis.Client
 	ctx              = context.Background()
 	keyPrefix        = "go-redis-demo:prefix:"
 	metricsNamespace = flag.String("metric.namespace", "app", "Prometheus metrics namespace, as the prefix of metrics name")
@@ -38,9 +37,6 @@ func main() {
 	apiResponseCpuSummary := metrics_controller.NewCPULoadSummary(*metricsNamespace)
 	// 创建一个新的Prometheus指标注册表
 	registry := prometheus.NewRegistry()
-
-	// 注册APIRequestCounter实例到Prometheus注册表
-	registry.MustRegister(apiRequestCounter)
 
 	// 注册MemoryUsageGauge实例到Prometheus注册表
 	registry.MustRegister(memoryUsageGauge)
